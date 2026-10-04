@@ -32,14 +32,12 @@
 | النظام | الحالة الحالية |
 |---|---|
 | Windows | موائم إدخال يستخدم خطاف لوحة المفاتيح ويدعم كشف عناصر كلمات المرور القياسية. |
-| macOS | موائم إدخال قيد التطوير، ويتطلب صلاحية مراقبة الإدخال/Accessibility. |
-| Linux | موائم إدخال قيد التطوير؛ الدعم يعتمد على X11 أو واجهة الإدخال المتاحة وصلاحيات الأجهزة. |
 
-**مهم:** فحص الحقول الآمنة واستثناء التطبيقات متاحان حاليًا في موائم Windows فقط. لا تستخدم التصحيح التلقائي في تطبيقات حساسة على macOS/Linux حتى يكتمل دعم الاستثناءات وفحص الحقول الآمنة. Wayland ليس مدعومًا على كل البيئات. يعرض التطبيق حالة المحرك عند بدء التشغيل.
+**نطاق الإصدار الحالي:** Windows فقط. لا تتوفر حزم أو موائمات إدخال مدعومة لـ macOS وLinux حاليًا. فحص الحقول الآمنة واستثناء التطبيقات متاحان في موائم Windows. يعرض التطبيق حالة المحرك عند بدء التشغيل.
 
 ### التحميل والتطوير
 
-حمّل آخر إصدار من [صفحة الإصدارات](https://github.com/bedaba/smart-layout-switcher/releases). حزم الأنظمة الثلاثة تُبنى عبر GitHub Actions؛ حزمة macOS لا تكون موثقة من Apple ما لم تُضف بيانات التوقيع والتوثيق.
+حمّل آخر إصدار من [صفحة الإصدارات](https://github.com/bedaba/smart-layout-switcher/releases). ينشئ GitHub Actions حزم Windows بصيغتي NSIS وMSI.
 
 للتطوير، ثبّت Node.js وRust ومتطلبات Tauri للنظام ثم شغّل:
 
@@ -78,14 +76,12 @@ Badelha is a desktop typing assistant that lives in the system tray. It checks a
 | Platform | Current status |
 |---|---|
 | Windows | Input adapter uses a keyboard hook and detects standard password controls. |
-| macOS | Input adapter is in development and requires Input Monitoring/Accessibility permission. |
-| Linux | Input adapter is in development; support depends on X11 or the available input backend and device permissions. |
 
-**Important:** Secure-field detection and application exclusions currently work only in the Windows adapter. Keep automatic correction off in sensitive macOS/Linux applications until secure-field and exclusion support is complete. Wayland support is not universal. The app reports the engine status at startup.
+**Current scope:** Windows only. Supported input adapters and release packages are not currently available for macOS or Linux. Secure-field detection and application exclusions are available in the Windows adapter. The app reports the engine status at startup.
 
 ### Downloads and development
 
-Download the latest release from [GitHub Releases](https://github.com/bedaba/smart-layout-switcher/releases). GitHub Actions builds packages for all three operating systems. macOS packages are not Apple-signed or notarized unless signing credentials are configured.
+Download the latest release from [GitHub Releases](https://github.com/bedaba/smart-layout-switcher/releases). GitHub Actions builds Windows packages in NSIS and MSI formats.
 
 Install Node.js, Rust, and the Tauri prerequisites for your operating system, then run:
 

@@ -21,9 +21,6 @@ body:
       label: Platform / النظام
       options:
         - Windows
-        - macOS
-        - Linux X11
-        - Linux Wayland
         - Other / أخرى
     validations:
       required: true
