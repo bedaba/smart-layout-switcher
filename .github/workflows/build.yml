@@ -70,10 +70,12 @@ jobs:
           if [[ -f tauri-build.log ]]; then
             echo '### Build diagnostics (last 100 lines)' >> "$GITHUB_STEP_SUMMARY"
             tail -n 100 tauri-build.log >> "$GITHUB_STEP_SUMMARY"
-            details="$(grep -E 'error:|Error:|Caused by:|failed to|Failed to' tauri-build.log | tail -n 30 | tr '\n' ' ')"
-            if [[ -n "$details" ]]; then
-              printf '::error title=Build diagnostics::%s\n' "$details"
-            fi
+            while IFS= read -r line; do
+              escaped="${line//'%'/'%25'}"
+              escaped="${escaped//$'\r'/'%0D'}"
+              escaped="${escaped//$'\n'/'%0A'}"
+              printf '::error title=Build log::%s\n' "$escaped"
+            done < <(tail -n 35 tauri-build.log)
           fi
 
       - name: Upload packages
