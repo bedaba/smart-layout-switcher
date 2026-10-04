@@ -8,12 +8,17 @@ use tauri::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AppSettings {
     pub enabled: bool,
     pub switch_layout: bool,
     pub launch_at_login: bool,
     pub confidence: f32,
     pub excluded_apps: Vec<String>,
+    pub custom_words: Vec<String>,
+    pub interface_language: String,
+    pub convert_shortcut: String,
+    pub undo_shortcut: String,
 }
 
 impl Default for AppSettings {
@@ -24,6 +29,10 @@ impl Default for AppSettings {
             launch_at_login: false,
             confidence: 0.8,
             excluded_apps: Vec::new(),
+            custom_words: Vec::new(),
+            interface_language: "ar".into(),
+            convert_shortcut: "CommandOrControl+Shift+J".into(),
+            undo_shortcut: "CommandOrControl+Shift+Z".into(),
         }
     }
 }
@@ -35,6 +44,7 @@ pub struct RuntimeStatus {
     pub supported: bool,
     pub permission: String,
     pub message: String,
+    pub message_en: String,
     pub layout: Option<String>,
 }
 
@@ -59,11 +69,62 @@ fn update_settings(
         .filter(|s| !s.is_empty())
         .take(100)
         .collect();
+    settings.custom_words = settings
+        .custom_words
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s.chars().count() <= 64)
+        .take(1000)
+        .collect();
+    if settings.interface_language != "en" {
+        settings.interface_language = "ar".into();
+    }
+    if settings.convert_shortcut.trim().is_empty() {
+        settings.convert_shortcut = "CommandOrControl+Shift+J".into();
+    }
+    if settings.undo_shortcut.trim().is_empty() {
+        settings.undo_shortcut = "CommandOrControl+Shift+Z".into();
+    }
     if let Ok(mut current) = state.0.lock() {
         *current = settings.clone();
     }
     platform::set_settings(settings);
     platform::status()
+}
+
+#[tauri::command]
+fn correct_selection(text: String) -> Option<String> {
+    platform::convert_selection(&text)
+}
+
+#[tauri::command]
+fn send_copy_shortcut() -> Result<(), String> {
+    send_system_shortcut('c')
+}
+
+#[tauri::command]
+fn send_paste_shortcut() -> Result<(), String> {
+    send_system_shortcut('v')
+}
+
+#[tauri::command]
+fn undo_last_correction() -> bool {
+    platform::undo_last_correction()
+}
+
+fn send_system_shortcut(key: char) -> Result<(), String> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    let modifier = Key::Meta;
+    #[cfg(not(target_os = "macos"))]
+    let modifier = Key::Control;
+    enigo
+        .key(modifier, Direction::Press)
+        .map_err(|e| e.to_string())?;
+    let key_result = enigo.key(Key::Unicode(key), Direction::Click);
+    let release_result = enigo.key(modifier, Direction::Release);
+    key_result.and(release_result).map_err(|e| e.to_string())
 }
 
 fn icon_pixels() -> tauri::image::Image<'static> {
@@ -97,25 +158,31 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(SharedState::default())
         .invoke_handler(tauri::generate_handler![
             get_runtime_status,
-            update_settings
+            update_settings,
+            correct_selection,
+            send_copy_shortcut,
+            send_paste_shortcut,
+            undo_last_correction
         ])
         .setup(|app| {
             let shared = app.state::<SharedState>().0.clone();
             platform::start(shared, app.handle().clone());
 
-            let show = MenuItem::with_id(app, "show", "فتح بدّلها", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Open / فتح بدّلها", true, None::<&str>)?;
             let toggle = MenuItem::with_id(
                 app,
                 "toggle",
-                "إيقاف أو استئناف التصحيح",
+                "Pause / Resume correction — إيقاف / استئناف",
                 true,
                 None::<&str>,
             )?;
             let separator = PredefinedMenuItem::separator(app)?;
-            let quit = PredefinedMenuItem::quit(app, Some("إنهاء بدّلها"))?;
+            let quit = PredefinedMenuItem::quit(app, Some("Quit / إنهاء بدّلها"))?;
             let menu = Menu::with_items(app, &[&show, &toggle, &separator, &quit])?;
             TrayIconBuilder::new()
                 .icon(icon_pixels())

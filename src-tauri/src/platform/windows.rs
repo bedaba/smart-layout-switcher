@@ -34,8 +34,18 @@ use windows_sys::Win32::{
 struct EngineState {
     settings: AppSettings,
     word: String,
+    context: Vec<String>,
+    undo: Option<UndoRecord>,
     foreground: isize,
     app: AppHandle,
+}
+
+struct UndoRecord {
+    original: String,
+    corrected: String,
+    delimiter: String,
+    at: std::time::Instant,
+    foreground: isize,
 }
 
 static ENGINE: OnceLock<Arc<Mutex<EngineState>>> = OnceLock::new();
@@ -50,6 +60,8 @@ impl PlatformInputAdapter for WindowsInputAdapter {
         let _ = ENGINE.set(Arc::new(Mutex::new(EngineState {
             settings: initial,
             word: String::new(),
+            context: Vec::new(),
+            undo: None,
             foreground: 0,
             app,
         })));
@@ -79,9 +91,44 @@ impl PlatformInputAdapter for WindowsInputAdapter {
             } else {
                 "تعذر تشغيل مراقب لوحة المفاتيح. أعد فتح التطبيق أو شغّله بنفس مستوى صلاحية البرنامج الذي تكتب فيه.".into()
             },
+            message_en: if ready {
+                "Correction runs locally. Standard password fields and excluded applications are ignored.".into()
+            } else {
+                "The keyboard monitor could not start. Restart the app or match its permission level to the app you are typing in.".into()
+            },
             layout,
         }
     }
+
+    fn undo_last_correction(&self) -> bool {
+        undo_correction()
+    }
+}
+
+fn undo_correction() -> bool {
+    let Some(engine) = ENGINE.get() else {
+        return false;
+    };
+    let Ok(mut state) = engine.lock() else {
+        return false;
+    };
+    let Some(record) = state.undo.take() else {
+        return false;
+    };
+    if record.foreground != unsafe { GetForegroundWindow() as isize }
+        || record.at.elapsed() > std::time::Duration::from_secs(8)
+    {
+        return false;
+    }
+    state.word.clear();
+    state.context.clear();
+    let restored = replace_word(&record.corrected, &record.original, &record.delimiter);
+    if restored {
+        let _ = state
+            .app
+            .emit("badelha-undo", serde_json::json!({ "restored": true }));
+    }
+    restored
 }
 
 pub fn set_settings(settings: AppSettings) {
@@ -143,8 +190,30 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
     let foreground = GetForegroundWindow() as isize;
     if foreground != state.foreground {
         state.word.clear();
+        state.context.clear();
+        state.undo = None;
         state.foreground = foreground;
     }
+
+    if event.vkCode == 0x5a && GetAsyncKeyState(VK_CONTROL as i32) < 0 && GetAsyncKeyState(0x10) < 0
+    {
+        if let Some(record) = state.undo.take() {
+            if record.foreground == foreground
+                && record.at.elapsed() <= std::time::Duration::from_secs(8)
+            {
+                let restored = replace_word(&record.corrected, &record.original, &record.delimiter);
+                state.word.clear();
+                state.context.clear();
+                if restored {
+                    let _ = state
+                        .app
+                        .emit("badelha-undo", serde_json::json!({ "restored": true }));
+                    return 1;
+                }
+            }
+        }
+    }
+
     if GetAsyncKeyState(VK_CONTROL as i32) < 0
         || GetAsyncKeyState(VK_MENU as i32) < 0
         || GetAsyncKeyState(VK_LWIN as i32) < 0
@@ -155,6 +224,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
     }
 
     if event.vkCode == VK_BACK as u32 {
+        state.undo = None;
         state.word.pop();
         return CallNextHookEx(null_mut(), code, wparam, lparam);
     }
@@ -192,6 +262,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
 
     let is_delimiter = event.vkCode == 0x20 || typed.chars().any(|ch| !ch.is_alphanumeric());
     if is_delimiter {
+        state.undo = None;
         if !state.settings.enabled
             || state.word.is_empty()
             || is_password_field()
@@ -201,23 +272,53 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
             return CallNextHookEx(null_mut(), code, wparam, lparam);
         }
         let threshold = state.settings.confidence;
-        let result = correct_token(&state.word, threshold);
-        if let Some((replacement, target_layout)) = result {
+        let result = correct_token(
+            &state.word,
+            threshold,
+            &state.context,
+            &state.settings.custom_words,
+        );
+        if let Some(correction) = result {
             let old = state.word.clone();
             let delimiter = if event.vkCode == 0x20 {
                 " "
             } else {
                 typed.as_str()
             };
-            let sent = replace_word(&old, &replacement, delimiter);
+            let sent = replace_word(&old, &correction.replacement, delimiter);
             state.word.clear();
             if sent {
                 if state.settings.switch_layout {
-                    switch_layout(target_layout);
+                    switch_layout(correction.language);
                 }
-                let _ = state.app.emit("badelha-correction", serde_json::json!({ "from": old, "to": replacement, "language": target_layout }));
+                state.undo = Some(UndoRecord {
+                    original: old.clone(),
+                    corrected: correction.replacement.clone(),
+                    delimiter: delimiter.to_owned(),
+                    at: std::time::Instant::now(),
+                    foreground,
+                });
+                state.context.push(correction.replacement.clone());
+                state.context.truncate(4);
+                let _ = state.app.emit(
+                    "badelha-correction",
+                    serde_json::json!({
+                        "from": old,
+                        "to": correction.replacement,
+                        "language": correction.language,
+                        "confidence": correction.confidence,
+                        "undoAvailable": true,
+                        "undoShortcut": state.settings.undo_shortcut,
+                        "undoExpiresInSeconds": 8
+                    }),
+                );
                 return 1;
             }
+        }
+        if !state.word.is_empty() {
+            let completed = state.word.clone();
+            state.context.push(completed);
+            state.context.truncate(4);
         }
         state.word.clear();
         return CallNextHookEx(null_mut(), code, wparam, lparam);
@@ -229,6 +330,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
                 .chars()
                 .all(|ch| ('\u{0600}'..='\u{06ff}').contains(&ch)))
     {
+        state.undo = None;
         if state.word.chars().count() < 64 {
             state.word.push_str(&typed);
         } else {

@@ -1,0 +1,42 @@
+name: Bug report / بلاغ عن مشكلة
+description: Report a bug / أبلغ عن مشكلة
+title: "[Bug / مشكلة]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        العربية: صف المشكلة والخطوات التي تؤدي إليها. لا تُرفق كلمات خاصة كتبتها.
+        English: Describe the issue and how to reproduce it. Do not include private text you typed.
+  - type: input
+    id: version
+    attributes:
+      label: App version / إصدار التطبيق
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / النظام
+      options:
+        - Windows
+        - macOS
+        - Linux X11
+        - Linux Wayland
+        - Other / أخرى
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and expected behavior / الخطوات والنتيجة المتوقعة
+      description: Mention the app and layout, but avoid pasting sensitive text. / اذكر التطبيق والتخطيط دون لصق نص حساس.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / ما حدث فعليًا
+    validations:
+      required: true

@@ -1,0 +1,22 @@
+name: Feature request / اقتراح ميزة
+description: Suggest an improvement / اقترح تطويرًا
+title: "[Feature / ميزة]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        العربية: اشرح المشكلة التي تحاول حلها والفكرة المقترحة.
+        English: Describe the problem you want to solve and your proposed idea.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / المشكلة
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution / الحل المقترح
+    validations:
+      required: true
