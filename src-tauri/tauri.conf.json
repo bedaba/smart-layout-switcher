@@ -30,7 +30,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "category": "Utility",
     "shortDescription": "تصحيح تلقائي لتخطيط لوحة المفاتيح",
     "longDescription": "يكتشف بدّلها الكلمات المكتوبة بتخطيط لوحة مفاتيح خاطئ ويصححها محليًا.",
